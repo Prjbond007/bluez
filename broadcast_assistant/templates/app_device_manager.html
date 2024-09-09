@@ -1,0 +1,196 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>Device Manager</h2>
+<div class="device-manager" style="text-align:center;">
+    <!-- Discover Devices Form -->
+    <form action="{{ url_for('start_discovery') }}" method="post" style="display:inline;">
+        <button type="submit">Discover Devices</button>
+    </form>
+    <form id="confirmSelectionForm" style="display:inline;">
+        <button type="submit">Confirm Selection</button>
+    </form>
+    <div id="loading" style="display:none; text-align:center; margin-top:10px;">Discovering devices... Please wait.</div>
+
+    <!-- Device Table Form for Pairing, Connecting, and Disconnecting -->
+    <form id="deviceTableForm" style="text-align:center;">
+        <table id="deviceTable" class="centered-table">
+            <thead>
+                <tr>
+                    <th>Number</th>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>RSSI</th>
+                    <th>Connected</th>
+                    <th>Paired</th>
+                    <th>LE Audio Support</th>
+                    <th>Select</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for path, device in devices.items() %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ device.Name }}</td>
+                    <td>{{ device.Address }}</td>
+                    <td>{{ device.RSSI }}</td>
+                    <td>{{'Yes' if device.get('connected') else 'No' }}</td>
+                    <td>{{ 'Yes' if device.get('paired') else 'No' }}</td>
+                    <td>{{ 'Yes' if device.get('leaudio') else 'No' }}</td>
+                    <td><input type="radio" name="selectedDevice" value="{{ path }}"></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <!-- Buttons for Pair, Connect, and Disconnect -->
+        <button type="button" id="pairDeviceBtn" {% if devices|length == 0 %}disabled{% endif %}>Pair</button>
+        <button type="button" id="unpairDeviceBtn" {% if devices|length == 0 %}disabled{% endif %}>Unpair</button>
+        <button type="button" id="connectDeviceBtn" {% if devices|length == 0 %}disabled{% endif %}>Connect</button>
+        <button type="button" id="disconnectDeviceBtn" {% if devices|length == 0 %}disabled{% endif %}>Disconnect</button>
+        <button type="button" id="getDeviceInfoBtn" {% if devices|length == 0 %}disabled{% endif %}>Get Device Info</button>
+    </form>
+
+    <div id="pairStatus" style="margin-top: 20px; font-weight: bold;"></div>
+    <div id="connectStatus" style="margin-top: 20px; font-weight: bold;"></div>
+    <div id="deviceInfo" style="margin-top: 20px;"></div>
+</div>
+
+<script>
+
+// Handle Confirm Selection button click
+document.getElementById('confirmSelectionForm').addEventListener('submit', function(event) {
+    event.preventDefault();  // Prevent the form from submitting normally
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    
+    if (selectedDevice) {
+        fetch('/confirm_device_selection', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              if (data.le_audio_supported) {
+                  // LE Audio supported, redirect to the homepage
+                  window.location.href = data.redirect_url;
+              } else {
+                  // LE Audio not supported, show an alert
+                  alert('LE Audio not supported. Please select a LE audio supported device.');
+              }
+          })
+          .catch(error => {
+              console.error('Error:', error);
+          });
+    } else {
+        alert('Please select a device.');
+    }
+});
+
+// Handle Pair button click
+document.getElementById('pairDeviceBtn').addEventListener('click', function() {
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/pair', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              document.getElementById('pairStatus').textContent = data.result;
+          })
+          .catch(error => {
+              document.getElementById('pairStatus').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a device to pair.');
+    }
+});
+
+
+// Handle Unpair button click
+document.getElementById('unpairDeviceBtn').addEventListener('click', function() {
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/unpair', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              document.getElementById('pairStatus').textContent = data.result;
+          })
+          .catch(error => {
+              document.getElementById('pairStatus').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a device to unpair.');
+    }
+});
+
+
+// Handle Connect button click
+document.getElementById('connectDeviceBtn').addEventListener('click', function() {
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/connect', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              document.getElementById('connectStatus').textContent = data.result;
+          })
+          .catch(error => {
+              document.getElementById('connectStatus').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a device to connect.');
+    }
+});
+
+// Handle Disconnect button click
+document.getElementById('disconnectDeviceBtn').addEventListener('click', function() {
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/disconnect', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              document.getElementById('connectStatus').textContent = data.result;
+          })
+          .catch(error => {
+              document.getElementById('connectStatus').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a device to disconnect.');
+    }
+});
+
+// Handle Get Device Info button click
+document.getElementById('getDeviceInfoBtn').addEventListener('click', function() {
+    const form = document.getElementById('deviceTableForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/get_device_info', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              let deviceInfoHtml = '<h3>Device Information:</h3><ul>';
+              for (const [key, value] of Object.entries(data.device_info)) {
+                  deviceInfoHtml += `<li><strong>${key}:</strong> ${value}</li>`;
+              }
+              deviceInfoHtml += '</ul>';
+              document.getElementById('deviceInfo').innerHTML = deviceInfoHtml;
+          })
+          .catch(error => {
+              document.getElementById('deviceInfo').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a device to get information.');
+    }
+});
+
+</script>
+{% endblock %}

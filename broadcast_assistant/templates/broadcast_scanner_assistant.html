@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<h2>Broadcast Scanner</h2>
+<div class="broadcast-scanner">
+    <!-- Start Scanning Button -->
+    <form action="{{ url_for('discover_broadcast') }}" method="post" style="text-align:center;">
+        <button type="submit" name="start_scan" id="startScanBtn">Start Scanning</button>
+    </form>
+
+    <!-- Broadcaster List -->
+    <form id="broadcasterListForm" style="text-align:center;">
+        <table id="broadcasterList" border="1" style="width: 100%; margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th>Number</th>
+                    <th>Name</th>
+                    <th>Address</th>
+                    <th>RSSI</th>
+                    <th>Select</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for address, broadcaster in broadcasters.items() %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ broadcaster.get('Name', 'Unknown') }}</td>
+                    <td>{{ broadcaster.get('Address', 'Unknown') }}</td>
+                    <td>{{ broadcaster.get('RSSI', 'Unknown') }}</td>
+                    <td><input type="radio" name="selectedDevice" value="{{ address }}"></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Confirm Broadcaster Selection Button -->
+        <button type="button" id="confirmSelectionBtn">Confirm Selection</button>
+
+        <!-- Get Broadcaster Info Button -->
+        <button type="button" id="getInfoBtn" {% if broadcasters|length == 0 %}disabled{% endif %}>Get Broadcaster Info</button>
+    </form>
+
+    <!-- Display Selected Broadcaster Information -->
+    <div id="broadcasterInfo" style="margin-top: 20px;"></div>
+</div>
+
+<script>
+// Handle Confirm Selection button click
+document.getElementById('confirmSelectionBtn').addEventListener('click', function() {
+    const form = document.getElementById('broadcasterListForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/confirm_broadcast_selection', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              if (data.redirect_url) {
+                  window.location.href = data.redirect_url;
+              }
+          })
+          .catch(error => {
+              alert('Error: ' + error);
+          });
+    } else {
+        alert('Please select a broadcaster.');
+    }
+});
+
+// Handle Get Broadcaster Info button click
+document.getElementById('getInfoBtn').addEventListener('click', function() {
+    const form = document.getElementById('broadcasterListForm');
+    const selectedDevice = form.querySelector('input[name="selectedDevice"]:checked');
+    if (selectedDevice) {
+        fetch('/broadcast_info', {
+            method: 'POST',
+            body: new FormData(form)
+        }).then(response => response.json())
+          .then(data => {
+              let broadcasterInfoHtml = '<h3>Broadcaster Information:</h3><ul>';
+              for (const [key, value] of Object.entries(data.selected_broadcaster)) {
+                  broadcasterInfoHtml += `<li><strong>${key}:</strong> ${value}</li>`;
+              }
+              broadcasterInfoHtml += '</ul>';
+              document.getElementById('broadcasterInfo').innerHTML = broadcasterInfoHtml;
+          })
+          .catch(error => {
+              document.getElementById('broadcasterInfo').textContent = `Error: ${error}`;
+          });
+    } else {
+        alert('Please select a broadcaster to get information.');
+    }
+});
+</script>
+{% endblock %}
