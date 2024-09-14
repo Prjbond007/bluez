@@ -175,22 +175,56 @@ document.getElementById('getDeviceInfoBtn').addEventListener('click', function()
         fetch('/get_device_info', {
             method: 'POST',
             body: new FormData(form)
-        }).then(response => response.json())
-          .then(data => {
-              let deviceInfoHtml = '<h3>Device Information:</h3><ul>';
-              for (const [key, value] of Object.entries(data.device_info)) {
-                  deviceInfoHtml += `<li><strong>${key}:</strong> ${value}</li>`;
-              }
-              deviceInfoHtml += '</ul>';
-              document.getElementById('deviceInfo').innerHTML = deviceInfoHtml;
-          })
-          .catch(error => {
-              document.getElementById('deviceInfo').textContent = `Error: ${error}`;
-          });
+        }).then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.statusText);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.device_info) {
+                updateSelectedDeviceRow(selectedDevice.value, data.device_info);
+                displayDeviceInfo(data.device_info);
+            } else {
+                alert('Failed to get updated device info: ' + data.result);
+            }
+        })
+        .catch(error => {
+            console.error('Failed to fetch device info:', error);
+            alert('Failed to fetch device info. Please check console for details.');
+        });
     } else {
         alert('Please select a device to get information.');
     }
 });
+
+function updateSelectedDeviceRow(devicePath, deviceInfo) {
+    const rows = document.querySelectorAll('#deviceTable tbody tr');
+    rows.forEach(row => {
+        if (row.querySelector('input[type="radio"]').value === devicePath) {
+            row.cells[3].textContent = deviceInfo.RSSI; // RSSI status
+            row.cells[4].textContent = deviceInfo.Connected ? 'Yes' : 'No'; // Connected status
+            row.cells[5].textContent = deviceInfo.Paired ? 'Yes' : 'No'; // Paired status
+            row.cells[6].textContent = deviceInfo.leaudio ? 'Yes' : 'No'; // LE Audio support
+        }
+    });
+}
+
+function displayDeviceInfo(deviceInfo) {
+    let deviceInfoHtml = '<h3>Device Information:</h3><ul>';
+    for (const [key, value] of Object.entries(deviceInfo)) {
+        if (Array.isArray(value)) {
+            deviceInfoHtml += `<li><strong>${key}:</strong> ${value.join(', ')}</li>`; // Handle UUIDs as an array
+        } else {
+            deviceInfoHtml += `<li><strong>${key}:</strong> ${value}</li>`;
+        }
+    }
+    deviceInfoHtml += '</ul>';
+    document.getElementById('deviceInfo').innerHTML = deviceInfoHtml;
+}
+
+
+
 
 </script>
 {% endblock %}

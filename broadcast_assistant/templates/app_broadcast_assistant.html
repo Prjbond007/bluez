@@ -1,0 +1,271 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="menu">
+    <a href="{{ url_for('device_manager') }}" class="button">Device Manager</a>
+    <a href="{{ url_for('broadcast_scanner') }}" class="button">Broadcast Scanner</a>
+</div>
+
+<!-- Display Selected Device and Broadcast Information -->
+<div style="display: flex; justify-content: space-around; margin-top: 20px;">
+    <div>
+        <h3>Selected Device Information:</h3>
+        {% if selected_device %}
+            <p>Name: {{ selected_device['Name'] }}</p>
+            <p>Address: {{ selected_device['Address'] }}</p>
+            <p>Address Type: {{ selected_device['Address Type'] }}</p>
+            <p>Connected: {{ selected_device['Connected'] }}</p>
+            <p>Paired: {{ selected_device['Paired'] }}</p>
+        {% else %}
+            <p>No device selected.</p>
+        {% endif %}
+    </div>
+
+    <div>
+        <h3>Selected Broadcast Information:</h3>
+        {% if selected_broadcaster %}
+            <p>Name: {{ selected_broadcaster['Name'] }}</p>
+            <p>Address: {{ selected_broadcaster['Address'] }}</p>
+            <p>Address Type: {{ selected_broadcaster['AddressType'] }}</p>
+        {% else %}
+            <p>No broadcast selected.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Service Discovery and Streaming Controls -->
+<div style="margin-top: 20px; text-align:center;">
+    <h3>Service Discovery</h3>
+    <!-- Service Discovery Button -->
+    <button id="serviceDiscoveryBtn" class="button">Service Discovery</button>
+    <!-- Display the discovery results -->
+    <div id="discoveryResults" style="margin-top: 20px;">
+        <p>No discovery attempted yet.</p>
+    </div>
+</div>
+
+<!-- Service Discovery and Streaming Controls -->
+<div style="margin-top: 20px; text-align:center;">
+    <h3>Broadcast Streaming Controls</h3>
+    <!-- Start and Stop Streaming Buttons -->
+    <button id="addStreamingBtn" class="button" disabled>Add Streaming</button>
+    <button id="startStreamingBtn" class="button" disabled>Start Streaming</button>
+    <button id="pauseStreamingBtn" class="button" disabled>Pause Streaming</button>
+    <button id="stopStreamingBtn" class="button" disabled>Remove Streaming</button>
+</div>
+
+
+<!-- Source Streaming Information Table -->
+<div style="margin-top: 20px;">
+    <h3>Source Streaming Information</h3>
+    <table border="1" style="width: 100%; text-align: left;">
+        <thead>
+            <tr>
+                <th>Broadcast State</th>
+                <th>PA Streaming</th>
+                <th>Encryption</th>
+                <th>Streaming State</th>
+                <th>Metadata</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td id="broadcastState">No Data</td>
+                <td id="paSyncState">No Data</td>
+                <td id="bigEncryption">No Data</td>
+                <td id="bisSyncState">No Data</td>
+                <td id="metadata">No Data</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Set Broadcast Code Section -->
+<div style="margin-top: 20px; text-align:center;">
+    <h3>Set Broadcast Code</h3>
+    <input type="text" id="broadcastCodeInput" placeholder="Enter Broadcast Code (32 hex digits)">
+    <button id="setBroadcastCodeBtn" class="button" disabled>Set Broadcast Code</button>
+</div>
+
+<!-- Display the decoded state -->
+<div id="broadcastStateDisplay" style="margin-top: 20px;">
+    <h3>Source Broadcast State Data:</h3>
+    <button id="fetchBroadcastStateBtn" class="button">Get Broadcast State</button>
+    <pre id="decodedStateText">No broadcast data received yet.</pre>
+</div>
+
+<script>
+    // Handle Service Discovery
+    document.getElementById('serviceDiscoveryBtn').addEventListener('click', function() {
+    fetch('/service_discovery', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        let resultsHTML = `<p>${data.message}</p>`;
+        if (data.bass_svc_path && data.brs_char_path && data.bascp_char_path) {
+            resultsHTML += `
+                <p>Broadcast Audio Scan Service Found: ${data.bass_svc_path}</p>
+                <p>Broadcast Receive State Found: ${data.brs_char_path}</p>
+                <p>Broadcast Control Point Found: ${data.bascp_char_path}</p>
+            `;
+            document.getElementById('addStreamingBtn').disabled = false;
+            document.getElementById('startStreamingBtn').disabled = false;
+            document.getElementById('pauseStreamingBtn').disabled = false;
+            document.getElementById('stopStreamingBtn').disabled = false;
+            document.getElementById('setBroadcastCodeBtn').disabled = false;
+        } else {
+            document.getElementById('addStreamingBtn').disabled = true;
+            document.getElementById('startStreamingBtn').disabled = true;
+            document.getElementById('pauseStreamingBtn').disabled = true;
+            document.getElementById('stopStreamingBtn').disabled = true;
+            document.getElementById('setBroadcastCodeBtn').disabled = true;
+        }
+        document.getElementById('discoveryResults').innerHTML = resultsHTML;
+        });
+    });
+
+
+    // Handle Setting Broadcast Code
+    document.getElementById('setBroadcastCodeBtn').addEventListener('click', function() {
+        const broadcastCode = document.getElementById('broadcastCodeInput').value;
+        if (broadcastCode.length !== 32) {
+            alert('Please enter a 32-digit hex broadcast code.');
+            return;
+        }
+
+        fetch('/set_broadcast_code', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ code: broadcastCode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Broadcast code set:', data.result);
+            setTimeout(fetchAndUpdateBroadcastState, 2000);
+        });
+    });
+
+    // Handle Add Streaming
+    document.getElementById('addStreamingBtn').addEventListener('click', function() {
+        fetch('/add_streaming', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Streaming Added:', data.result);
+            // Fetch the latest broadcast state after a short delay
+            setTimeout(fetchAndUpdateBroadcastState, 2000);
+        });
+    });
+
+    // Handle Start Streaming
+    document.getElementById('startStreamingBtn').addEventListener('click', function() {
+        fetch('/start_streaming', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Streaming Started:', data.result);
+            // Fetch the latest broadcast state after a short delay
+            setTimeout(fetchAndUpdateBroadcastState, 500);
+        });
+    });
+
+    // Handle Pause Streaming
+    document.getElementById('pauseStreamingBtn').addEventListener('click', function() {
+        fetch('/pause_streaming', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Streaming Paused:', data.result);
+            // Fetch the latest broadcast state after a short delay
+            setTimeout(fetchAndUpdateBroadcastState, 500);
+        });
+    });
+
+    // Handle Stop Streaming
+    document.getElementById('stopStreamingBtn').addEventListener('click', function() {
+        fetch('/stop_streaming', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Streaming Stopped:', data.result);
+            // Fetch the latest broadcast state after a short delay
+            setTimeout(fetchAndUpdateBroadcastState, 500);
+        });
+    });
+
+    function fetchAndUpdateBroadcastState() {
+        fetch('/get_broadcast_state', {
+            method: 'GET'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Error fetching broadcast state:', data.error);
+                document.getElementById('decodedStateText').textContent = data.error;
+            } else {
+                updateStreamInfo(data);  // Call the function to update the UI with the fetched state
+                console.log('Updated state:', data);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching broadcast state:', error);
+        });
+    }
+
+    // Update the table with the streaming info
+    // JavaScript to handle and display the updated state
+    function updateStreamInfo(broadcast_info) {
+        if (!broadcast_info) {
+            console.error("No broadcast info available");
+            return;
+        }
+
+        document.getElementById('broadcastState').innerText = broadcast_info.Source_Address ? `Broadcast Found: ${broadcast_info.Source_Address}` : 'No Broadcast found';
+        document.getElementById('paSyncState').innerText = broadcast_info.PA_Sync_State_Description || 'No Data';
+        document.getElementById('bigEncryption').innerText = broadcast_info.BIG_Encryption_Description || 'No Data';
+
+        // Correcting the handling for BIS_Sync_State and Metadata
+        if (broadcast_info.Subgroups && broadcast_info.Subgroups.length > 0) {
+            document.getElementById('bisSyncState').innerText = broadcast_info.Subgroups[0].BIS_Sync_State_Description || 'No Data';
+
+            // Update to display metadata according to the new type mappings
+            let metadataDescriptions = broadcast_info.Subgroups[0].Metadata.map(md => {
+                let contextType = md.Type === 1 ? "Streaming Audio Contexts" : md.Type === 2 ? "Preferred Audio Contexts" : "Unknown";
+                return `${contextType}: ${md.Description}`;
+            }).join(', ');
+            document.getElementById('metadata').innerText = metadataDescriptions || 'No Data';
+        } else {
+            document.getElementById('bisSyncState').innerText = 'No Data';
+            document.getElementById('metadata').innerText = 'No Data';
+        }
+    }
+
+
+    // Fetch broadcast state when the button is clicked
+    document.getElementById('fetchBroadcastStateBtn').addEventListener('click', function() {
+        fetch('/get_broadcast_state', {
+            method: 'GET',
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('decodedStateText').textContent = data.error;
+            } else {
+                document.getElementById('decodedStateText').textContent = JSON.stringify(data, null, 2);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching broadcast state:', error);
+        });
+    });
+
+
+</script>
+{% endblock %}
